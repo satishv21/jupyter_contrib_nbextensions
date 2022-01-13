@@ -19,11 +19,16 @@ define([
                 },
                 'celldep':{
                     library: 'ast_parser_celldep.py',
-                    hello:'main()'
+                    cellDeps:'main()'
                 },
                 'parallel':{
                     library: 'parallelCellsPlug.py',
                     parallelize:'main()'
+                },
+                'parallel_celldep':{
+                    library: 'celldep_parallel_pluginsupport.py',
+                    parallelize:'parallel()',
+                    cellDeps:'cellDep()'
                 }
             },
             'types_to_exclude': ['module', 'function', 'builtin_function_or_method', 'instance', '_Feature']
@@ -171,19 +176,19 @@ define([
                     cellIndex = index
                 }
             }
-            var kernel_config = cfg.kernels_config['celldep'];
-            kernel_config.hello = "main('''".concat(getCellContents(cellIndex),"''')")
+            var kernel_config = cfg.kernels_config['parallel_celldep'];
+            kernel_config.cellDeps = "cellDep('''".concat(getCellContents(cellIndex),"''')")
             requirejs(['nbextensions/varInspector/jquery.tablesorter.min'],    
             function() {
                     Jupyter.notebook.kernel.execute(
-                        kernel_config.hello, { iopub: { output: code_exec_callback } }, { silent: false }
+                        kernel_config.cellDeps, { iopub: { output: code_exec_callback } }, { silent: false }
                     );
                 });
         }
 
         var executeParallelScript = function(){
-            var kernel_config = cfg.kernels_config['parallel'];
-            kernel_config.parallelize = "main('''".concat(getCellContents(-1),"''')")
+            var kernel_config = cfg.kernels_config['parallel_celldep'];
+            kernel_config.parallelize = "parallel('''".concat(getCellContents(-1),"''')")
             requirejs(['nbextensions/varInspector/jquery.tablesorter.min'],    
             function() {
                     Jupyter.notebook.kernel.execute(
@@ -483,8 +488,13 @@ define([
         var reorderCells = function(orderArray){
             console.log("Reorder started");
             for(let i = 0; i < orderArray.length; i++){
+                let positionSwaps = 0
                 for(let j = 0; j < orderArray[i]-i-1; j++){
                     Jupyter.notebook.move_cell_up(orderArray[i]-j-1)
+                    positionSwaps += 1
+                }
+                for (let swap = 1; swap < positionSwaps; swap++){
+                    Jupyter.notebook.move_cell_down(i+swap)
                 }
             }
         }
@@ -541,8 +551,7 @@ define([
 
     // Run on start
     function load_ipython_extension() {
-        read_code_init(cfg.kernels_config['celldep'].library)
-        read_code_init(cfg.kernels_config['parallel'].library)
+        read_code_init(cfg.kernels_config['parallel_celldep'].library)
         defaultCellButton();
         addCellbutton();
         reorganizeCellsButton();

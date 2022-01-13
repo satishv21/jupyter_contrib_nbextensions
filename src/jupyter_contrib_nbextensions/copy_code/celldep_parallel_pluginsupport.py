@@ -4,7 +4,32 @@ from pprint import pprint
 cellDict = {}
 
 
-def main(cellstring):
+def parallel(cellstring):
+    cellDict.clear()
+    cellNum = 1
+    cells = cellstring.split('/**/')
+    selectedCell = int(cells[-1])
+    for cell in cells[:-1]:
+        tree = ast.parse(cell)
+        analyzer = Analyzer()
+        analyzer.visit(tree)
+        cellDict[cellNum] = analyzer.report()
+        cellNum += 1;
+    masterCellDepList = []
+    for j in range(cellNum - 1, 0, -1):
+        cellDepList = getCellDep(j)
+        cellDepLists = []
+        for i in range(1, len(cellDepList) + 1):
+            cellDepCombos = [list(k) for k in list(itertools.combinations(cellDepList, i))]
+            [subl.append(j) for subl in cellDepCombos if not subl is None]
+            cellDepLists.append([item for item in cellDepCombos])
+        cellDepLists = [item for sublist in cellDepLists for item in sublist]
+        masterCellDepList.insert(0, validateCellDeps(cellDepLists))
+    return parallelCellProcessing(masterCellDepList)
+
+
+def cellDep(cellstring):
+    cellDict.clear()
     cellNum = 1
     cells = cellstring.split('/**/')
     print(cells)
@@ -30,26 +55,46 @@ def main(cellstring):
     return formatOutput(masterCellDepList[selectedCell], selectedCell)
 
 
+def parallelCellProcessing(cellDeps):
+    # Traverse cell by cell
+    # print(cellDeps)
+    parallelCells = []
+    for cell in range(3, len(cellDeps)):
+        currCellDep = cellDeps[cell]
+        for i in range(0, len(currCellDep) - 1):
+            listParallelCandidates = [currCellDep[i]]
+            for j in range(i + 1, len(currCellDep)):
+                if len(currCellDep[i]) == len(currCellDep[j]) and len(currCellDep[i]) > 2 and currCellDep[i][0] == \
+                        currCellDep[j][0] and currCellDep[i][-1] == currCellDep[j][-1]:
+                    listParallelCandidates.append(currCellDep[j])
+            if len(listParallelCandidates) > 1:
+                for k in range(1, len(currCellDep[i]) - 1):
+                    listParallelCells = [item for t in parallelCells for item in t]
+                    currParallelCandidates = [item[k] for item in listParallelCandidates]
+                    if len(set(currParallelCandidates)) == len(currParallelCandidates) and len(
+                            set(currParallelCandidates) - set(listParallelCells)) == len(currParallelCandidates):
+                        parallelCells.append(currParallelCandidates)
+    return formatParallelCells(parallelCells)
+
+
+def formatParallelCells(parallelCells):
+    outputString = ''
+    for pair in parallelCells:
+        for item in pair:
+            outputString += str(item) + '-'
+        if outputString[-1] == '-':
+            outputString = outputString[:-1]
+        outputString += '|'
+    return outputString[:-1]
+
+
 def formatOutput(cellDependencies, selectedCell):
     formatString = str(selectedCell) + '|'
-    for cellDep in cellDependencies:
-        for cell in cellDep:
+    for thisCellDep in cellDependencies:
+        for cell in thisCellDep:
             formatString += str(cell) + '-'
         formatString += '|'
     return formatString
-
-
-def checkCellOutput(depList, cells, cellNum, target):
-    text = ""
-    for num in depList:
-        text = text + cells[num - 1]
-    f = open("cellTest.py", "w")
-    f.write(text)
-    f.close()
-    proc = subprocess.Popen(['python', 'cellTest.py'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    result = proc.communicate()[0].decode('utf-8').strip()
-    if result == target:
-        print("SUCCESS!")
 
 
 def validateCellDeps(cellDepLists):
@@ -75,6 +120,19 @@ def getCellDep(i):
                         depList.append(parentcell)
                 depList.append(j)
     return depList
+
+
+def checkCellOutput(depList, cells, cellNum, target):
+    text = ""
+    for num in depList:
+        text = text + cells[num - 1]
+    f = open("cellTest.py", "w")
+    f.write(text)
+    f.close()
+    proc = subprocess.Popen(['python', 'cellTest.py'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    result = proc.communicate()[0].decode('utf-8').strip()
+    if result == target:
+        print("SUCCESS!")
 
 
 class Analyzer(ast.NodeVisitor):
@@ -121,22 +179,3 @@ class Analyzer(ast.NodeVisitor):
 
     def report(self):
         return self.stats
-# print(main('''a = 3
-# b = 4/**/c = a * 2
-# d = 6
-# print(c*d)/**/meanA = (a + b)/2/**/meanB = (c + d)/2/**/combinedMean = (a + b + c + d)/4/**/2'''))
-# print(main('''a = 3
-# b = 4/**/c = 5
-# d = 6/**/meanA = (a + b)/2/**/meanB = (c + d)/2/**/combinedMean = (a + b + c + d)/4/**/2'''))
-# print(main('''import math
-# data = [97, 43, 75, 69, 30, 26, 91, 60, 88, 17]/**/dataSum = 0
-# for val in data:
-#    dataSum += val
-# mean = dataSum/len(data)/**/dataDiffs = []
-# for val in data:
-#    dataDiffs.append(val-mean)/**/stdDev = 0
-# for val in dataDiffs:
-#    stdDev += val
-# stdDev /= len(dataDiffs)
-# stdDev = math.sqrt(stdDev)/**/for i in range(len(dataDiffs)):
-#    dataDiffs[i] *= dataDiffs[i]/**/print("The Standard Deviation of this Data is: ", stdDev)/**/0'''))
